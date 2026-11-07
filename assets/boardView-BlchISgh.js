@@ -1,4 +1,4 @@
-import{t as e}from"./index-DN6jjLp4.js";function t(e){return e.enlace?window.innerWidth<850?`
+import{t as e}from"./index-DA6LW7xE.js";function t(e){return e.enlace?window.innerWidth<850?`
       <div class="visor-movil-pdf">
         <span class="icono-doc-movil">📄</span>
         <h4>Documento PDF</h4>
