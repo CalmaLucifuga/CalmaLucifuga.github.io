@@ -1,15 +1,20 @@
-import{t as e}from"./index-DdZmgSCl.js";function t(e){return e.enlace?`
+import{t as e}from"./index-DN6jjLp4.js";function t(e){return e.enlace?window.innerWidth<850?`
+      <div class="visor-movil-pdf">
+        <span class="icono-doc-movil">📄</span>
+        <h4>Documento PDF</h4>
+        <p class="subtexto-doc-movil">${e.titulo}</p>
+        <a href="${e.enlace}" target="_blank" rel="noopener" class="btn-abrir-pdf-movil">
+          Abrir en Visor Nativo ↗
+        </a>
+      </div>
+    `:`
     <div class="contenedor-visor-pdf">
       <iframe
         src="${`${e.enlace}#toolbar=1&navpanes=0`}"
         title="Documento: ${e.titulo}"
         class="iframe-pdf"
         loading="lazy"
-      >
-        <p>Tu navegador no soporta la previsualización integrada. 
-          <a href="${e.enlace}" target="_blank" rel="noopener">Descargar PDF</a>.
-        </p>
-      </iframe>
+      ></iframe>
     </div>
   `:`
       <div class="visor-vacio">
@@ -22,20 +27,16 @@ import{t as e}from"./index-DdZmgSCl.js";function t(e){return e.enlace?`
         Abrir o descargar archivo externo
       </a>
     </div>
-  `}function r(e){if(!e||!e.enlace)return n(e);switch(e.enlace.split(`.`).pop().toLowerCase().split(`#`)[0].split(`?`)[0]){case`pdf`:return t(e);default:return n(e)}}var i=[];function a(){let t=document.querySelector(`#lista-arrastrables`),n=document.querySelector(`#zona-suelta`),a=document.querySelector(`#btn-limpiar-pizarra`),o=document.querySelector(`#btn-toggle-panel`),s=document.querySelector(`.contenedor-pizarra`),c=document.querySelectorAll(`.btn-split`),l=document.querySelector(`#btn-pantalla-completa`),u=document.querySelector(`#vista-pizarra`);function d(){t?!e||e.length===0?t.innerHTML=`
-        <p style="font-size: 0.85rem; color: #ef4444;">
-          No se encontraron proyectos en proyectos.json
-        </p>
-      `:(t.innerHTML=e.map(e=>`
-      <div 
-        class="item-arrastrable" 
-        draggable="true" 
-        data-id="${e.id}"
-      >
-        <h4>${e.titulo||`Sin título`}</h4>
-        <span class="badge-mini">${e.categoria||`General`}</span>
+  `}function r(e){if(!e||!e.enlace)return n(e);switch(e.enlace.split(`.`).pop().toLowerCase().split(`#`)[0].split(`?`)[0]){case`pdf`:return t(e);default:return n(e)}}var i=[];function a(){let t=document.querySelector(`#lista-arrastrables`),n=document.querySelector(`#zona-suelta`),a=document.querySelector(`#btn-limpiar-pizarra`),o=document.querySelector(`#btn-toggle-panel`),s=document.querySelector(`.contenedor-pizarra`),c=document.querySelectorAll(`.btn-split`),l=document.querySelector(`#btn-pantalla-completa`),u=document.querySelector(`#vista-pizarra`);function d(){t&&(t.innerHTML=e.map(e=>`
+      <div class="item-arrastrable" draggable="true" data-id="${e.id}">
+        <div class="info-arrastrable">
+          <h4>${e.titulo||`Sin título`}</h4>
+          <span class="badge-mini">${e.categoria||`General`}</span>
+        </div>
+        <!-- Botón táctil para móviles (añadir con 1 toque) -->
+        <button class="btn-toque-anadir" data-id="${e.id}" title="Añadir a la mesa">+</button>
       </div>
-    `).join(``),t.querySelectorAll(`.item-arrastrable`).forEach(e=>{e.addEventListener(`dragstart`,t=>{t.dataTransfer.setData(`text/plain`,e.dataset.id),e.classList.add(`arrastrando`)}),e.addEventListener(`dragend`,()=>{e.classList.remove(`arrastrando`)})})):console.error(`Error: No se encontró el elemento #lista-arrastrables en index.html`)}c.forEach(e=>{e.addEventListener(`click`,()=>{c.forEach(e=>e.classList.remove(`activo`)),e.classList.add(`activo`);let t=e.dataset.layout;n.dataset.layout=t})}),o&&s&&o.addEventListener(`click`,()=>{s.classList.toggle(`panel-oculto`);let e=s.classList.contains(`panel-oculto`);o.textContent=e?`▶ Mostrar Panel`:`◀ Ocultar Panel`}),l&&u&&l.addEventListener(`click`,()=>{document.fullscreenElement?document.exitFullscreen():u.requestFullscreen().catch(e=>{console.warn(`El navegador bloqueó la pantalla completa:`,e.message)})});function f(e){return`
+    `).join(``),t.querySelectorAll(`.btn-toque-anadir`).forEach(t=>{t.addEventListener(`click`,n=>{n.stopPropagation();let r=t.dataset.id,a=e.find(e=>String(e.id)===String(r));a&&!i.some(e=>String(e.id)===String(a.id))&&(i.push(a),h(a))})}),t.querySelectorAll(`.item-arrastrable`).forEach(e=>{e.addEventListener(`dragstart`,t=>{t.dataTransfer.setData(`text/plain`,e.dataset.id),e.classList.add(`arrastrando`)}),e.addEventListener(`dragend`,()=>e.classList.remove(`arrastrando`))}))}c.forEach(e=>{e.addEventListener(`click`,()=>{c.forEach(e=>e.classList.remove(`activo`)),e.classList.add(`activo`);let t=e.dataset.layout;n.dataset.layout=t})}),o&&s&&o.addEventListener(`click`,()=>{s.classList.toggle(`panel-oculto`);let e=s.classList.contains(`panel-oculto`);o.textContent=e?`▶ Mostrar Panel`:`◀ Ocultar Panel`}),l&&u&&l.addEventListener(`click`,()=>{document.fullscreenElement?document.exitFullscreen():u.requestFullscreen().catch(e=>{console.warn(`El navegador bloqueó la pantalla completa:`,e.message)})});function f(e){return`
       <article class="panel-documento" data-id="${e.id}">
         <header class="cabecera-panel">
           <div class="info-doc">
