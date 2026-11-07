@@ -232,7 +232,7 @@
       >
         <span class="fragmento-papel"></span>
       </div>
-    `}return t}var D=`/fondos/textura-base.jpg`,O=`/fondos/24000001-large.png`,k=`
+    `}return t}var D=`/fondos/cme.jpg`,O=`/fondos/24000001-large.png`,k=`
   attribute vec2 a_position;
   varying vec2 v_uv;
   void main() {
@@ -256,41 +256,60 @@
   uniform vec2 u_tex_liquid_size;
 
   // =========================================================
-  // ALGORITMO COVER UNIVERSAL (PC Y MÓVIL VERTICAL)
+  // ALGORITMO COVER CON ZOOM Y ENFOQUE VERTICAL
   // =========================================================
-  vec2 getCoverUV(vec2 uv, vec2 screenRes, vec2 texRes) {
+  vec2 getCoverUV(vec2 uv, vec2 screenRes, vec2 texRes, float zoomFactor, float offsetY) {
     vec2 s = max(screenRes, vec2(1.0, 1.0));
     vec2 i = max(texRes, vec2(1.0, 1.0));
 
-    float rs = s.x / s.y; // Proporción de la pantalla
-    float ri = i.x / i.y; // Proporción de la imagen
+    float rs = s.x / s.y;
+    float ri = i.x / i.y;
 
     vec2 uvCover = uv;
     if (rs < ri) {
-      // PANTALLA VERTICAL (SMARTPHONE): Escala horizontal centrada
       float factor = rs / ri;
       uvCover.x = (uv.x - 0.5) * factor + 0.5;
     } else {
-      // PANTALLA HORIZONTAL (PC / ESCRITORIO): Escala vertical centrada
       float factor = ri / rs;
       uvCover.y = (uv.y - 0.5) * factor + 0.5;
     }
 
-    // Zoom de seguridad del 12% para absorber ondulaciones
-    uvCover = (uvCover - 0.5) * 0.88 + 0.5;
+    // Desplazamiento de encuadre vertical
+    uvCover.y += offsetY;
 
-    // CLAMPING ESTRICTO: NUNCA permite salir de [0, 1] (Elimina líneas estiradas al 100%)
+    // Zoom específico: si zoomFactor es 2.4, la textura se agranda 2.4 veces
+    uvCover = (uvCover - 0.5) * (0.88 / zoomFactor) + 0.5;
+
     return clamp(uvCover, 0.002, 0.998);
   }
 
   void main() {
     vec2 uv = v_uv;
 
-    // UVs calculadas con el algoritmo universal
-    vec2 uvBase = getCoverUV(uv, u_resolution, u_tex_base_size);
-    vec2 uvLiquid = getCoverUV(uv, u_resolution, u_tex_liquid_size);
+    // ¿Es pantalla vertical (móvil)?
+    bool esMovil = u_resolution.x < u_resolution.y;
 
-    // Parallax vertical seguro dentro de los márgenes clamp
+    // =========================================================
+    // 1. ESCALA Y ENCUADRE DE LA IMAGEN BASE (FONDO A)
+    // =========================================================
+    // En PC: 1.0 | En Móvil: 2.2x de zoom para que no se vea miniatura
+    float zoomBase = esMovil ? 1.00 : 1.0;
+    
+    // Si en móvil quieres enfocar más arriba o más abajo de la foto A:
+    // (Valores positivos suben la foto, valores negativos la bajan: ej. 0.05 o -0.05)
+    float offsetYBase = esMovil ? 0.0 : 0.0;
+
+    vec2 uvBase = getCoverUV(uv, u_resolution, u_tex_base_size, zoomBase, offsetYBase);
+
+    // =========================================================
+    // 2. ESCALA Y ENCUADRE DE LA MAREA (FONDO B)
+    // =========================================================
+    float zoomMarea = esMovil ? 2.20 : 1.0;
+    float offsetYMarea = esMovil ? 0.0 : 0.0;
+
+    vec2 uvLiquid = getCoverUV(uv, u_resolution, u_tex_liquid_size, zoomMarea, offsetYMarea);
+
+    // Parallax vertical seguro
     uvBase.y = clamp(uvBase.y + (u_scroll_progress - 0.5) * 0.08, 0.002, 0.998);
     uvLiquid.y = clamp(uvLiquid.y + (u_scroll_progress - 0.5) * 0.10, 0.002, 0.998);
 
@@ -300,7 +319,6 @@
     float tiempoMarea = u_time * 0.75;
     float vaivenMarea = pow(sin(tiempoMarea) * 0.5 + 0.5, 0.85);
 
-    // En móviles (pantallas estrechas), ajustamos la marea para que sea proporcional
     float limiteMaximo = u_limite_marea;
     float anchoBaseAgua = (limiteMaximo - 0.04) * (0.84 + vaivenMarea * 0.16);
 
@@ -311,32 +329,27 @@
 
     float anchoTotalAgua = clamp(anchoBaseAgua + curvaOrilla, 0.04, limiteMaximo);
 
-    // Posición de la orilla
     float xOrilla = 1.0 - anchoTotalAgua;
     float distOrilla = uv.x - xOrilla;
     float factorAgua = smoothstep(-0.008, 0.008, distOrilla);
 
     // =========================================================
-    // 2. FONDO A (BASE) Y AVANCE DEL TELÓN NEGRO CONTROLADO
+    // 2. FONDO A (BASE) Y AVANCE DEL TELÓN NEGRO
     // =========================================================
     vec4 texColorBase = texture2D(u_tex_base, uvBase);
     vec3 colorBaseLuz = texColorBase.rgb;
 
-    // CORRECCIÓN CLAVE: El telón negro avanza desde la izquierda,
-    // pero su límite MÁXIMO es exactamente donde empieza el agua (xOrilla).
-    // Jamás invade el mar de la derecha.
     float frenteTelon = u_telon_progreso * (xOrilla + 0.06) - 0.06;
     float distTelon = frenteTelon - uv.x;
     float factorNegro = smoothstep(-0.03, 0.03, distTelon);
     
-    // Borde de penumbra suave
     float sombraAvance = smoothstep(0.08, 0.0, abs(distTelon)) * (1.0 - factorNegro) * 0.60;
     vec3 colorNegroCarbon = vec3(0.047, 0.039, 0.031);
 
     vec3 colorBaseConTelon = mix(colorBaseLuz - vec3(sombraAvance), colorNegroCarbon, factorNegro);
 
     // =========================================================
-    // 3. FONDO B (MAREA LÍQUIDA VIVA)
+    // 3. FONDO B (MAREA LÍQUIDA CON ZOOM ADAPTATIVO)
     // =========================================================
     vec2 refraccionLiquida = vec2(
       sin(uv.y * 20.0 + u_time * 1.8) * 0.004,
@@ -358,11 +371,11 @@
     vec3 colorComposicion = mix(colorBaseConTelon, colorLiquidFinal, factorAgua);
     vec3 colorFinal = mix(colorComposicion, colorEspumaSuave, bordeOrilla * factorAgua);
 
-    // Saturación viva de color
+    // Refuerzo de viveza
     float saturacion = 1.15;
     float luminancia = dot(colorFinal, vec3(0.299, 0.587, 0.114));
     colorFinal = mix(vec3(luminancia), colorFinal, saturacion);
 
     gl_FragColor = vec4(colorFinal, 1.0);
   }
-`,A=!1,j=0,M=2100,N=0,P=0;function F(e=!0){N=+!!e}function I(){A=!0,j=performance.now()}function L(e){let t=Math.max(0,Math.min(1,e));return t*t*t*(t*(t*6-15)+10)}function R(){if(document.querySelector(`#canvas-inmersivo`))return;let e=document.createElement(`canvas`);e.id=`canvas-inmersivo`,document.body.prepend(e);let t=e.getContext(`webgl`)||e.getContext(`experimental-webgl`);if(!t)return;function n(e,n){let r=t.createShader(e);return t.shaderSource(r,n),t.compileShader(r),t.getShaderParameter(r,t.COMPILE_STATUS)?r:(console.error(`Error al compilar Shader:`,t.getShaderInfoLog(r)),t.deleteShader(r),null)}let r=n(t.VERTEX_SHADER,k),i=n(t.FRAGMENT_SHADER,te);if(!r||!i)return;let a=t.createProgram();if(t.attachShader(a,r),t.attachShader(a,i),t.linkProgram(a),!t.getProgramParameter(a,t.LINK_STATUS))return;t.useProgram(a);let o=new Float32Array([-1,-1,1,-1,-1,1,1,1]),s=t.createBuffer();t.bindBuffer(t.ARRAY_BUFFER,s),t.bufferData(t.ARRAY_BUFFER,o,t.STATIC_DRAW);let c=t.getAttribLocation(a,`a_position`);t.enableVertexAttribArray(c),t.vertexAttribPointer(c,2,t.FLOAT,!1,0,0);let l=t.getUniformLocation(a,`u_time`),u=t.getUniformLocation(a,`u_scroll_progress`),d=t.getUniformLocation(a,`u_limite_marea`),f=t.getUniformLocation(a,`u_telon_progreso`),p=t.getUniformLocation(a,`u_resolution`),m=t.getUniformLocation(a,`u_tex_base`),h=t.getUniformLocation(a,`u_tex_liquid`),g=t.getUniformLocation(a,`u_tex_base_size`),_=t.getUniformLocation(a,`u_tex_liquid_size`);function y(){let n=Math.min(window.devicePixelRatio||1,window.innerWidth<850?1.25:1.5);e.width=Math.floor(window.innerWidth*n),e.height=Math.floor(window.innerHeight*n),t.viewport(0,0,e.width,e.height),t.uniform2f(p,e.width,e.height)}window.addEventListener(`resize`,y),y(),t.uniform2f(g,1920,1080),t.uniform2f(_,1920,1080);function b(e,n,r,i,a){let o=t.createTexture();t.activeTexture(e),t.bindTexture(t.TEXTURE_2D,o),t.texImage2D(t.TEXTURE_2D,0,t.RGBA,1,1,0,t.RGBA,t.UNSIGNED_BYTE,new Uint8Array([247,243,238,255]));let s=new Image;s.crossOrigin=`anonymous`,s.src=n,s.onload=()=>{t.activeTexture(e),t.bindTexture(t.TEXTURE_2D,o),t.texImage2D(t.TEXTURE_2D,0,t.RGBA,t.RGBA,t.UNSIGNED_BYTE,s),t.texParameteri(t.TEXTURE_2D,t.TEXTURE_WRAP_S,t.CLAMP_TO_EDGE),t.texParameteri(t.TEXTURE_2D,t.TEXTURE_WRAP_T,t.CLAMP_TO_EDGE),t.texParameteri(t.TEXTURE_2D,t.TEXTURE_MIN_FILTER,t.LINEAR),t.texParameteri(t.TEXTURE_2D,t.TEXTURE_MAG_FILTER,t.LINEAR),t.uniform2f(a,s.naturalWidth||1920,s.naturalHeight||1080)},s.onerror=()=>{s.src.includes(`.png`)?s.src=n.replace(`.png`,`.jpg`):r&&s.src!==r&&(s.src=r)};let c=e-t.TEXTURE0;t.uniform1i(i,c)}b(t.TEXTURE0,D,`https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=1600&auto=format&fit=crop`,m,g),b(t.TEXTURE1,O,`https://images.unsplash.com/photo-1518837695005-2083093ee35b?w=1600&auto=format&fit=crop`,h,_);let x=0,S=performance.now();v(e=>{x=e.progreso});function C(e){let n=(e-S)*.001;P+=(N-P)*.06;let r=.395;if(A){let t=(e-j)/M;t>=1?(A=!1,r=.395):r=t<.42?.395+L(t/.42)*(.85-.395):t<.76?.85-L((t-.42)/.34)*.55:.3+L((t-.76)/.24)*(.395-.3)}t.uniform1f(l,n),t.uniform1f(u,x),t.uniform1f(d,r),t.uniform1f(f,P),t.drawArrays(t.TRIANGLE_STRIP,0,4),requestAnimationFrame(C)}requestAnimationFrame(C)}var ne=`modulepreload`,re=function(e){return`/`+e},ie={},ae=function(e){return e.pathname.endsWith(`.css`)},oe=function(e,t,n){if(t in e)return e[t];let r=n();if(!r){e[t]=void 0;return}let i=r.then(()=>{e[t]=void 0},n=>{throw e[t]=void 0,n});return e[t]=i,i},z=function(e,t,n){let r=Promise.resolve();if(t&&t.length>0){let e,i=document.querySelector(`meta[property=csp-nonce]`),a=i?.nonce||i?.getAttribute(`nonce`);function o(e){return Promise.all(e.map(e=>Promise.resolve(e).then(e=>({status:`fulfilled`,value:e}),e=>({status:`rejected`,reason:e}))))}function s(e){return import.meta.resolve?new URL(import.meta.resolve(e)):new URL(e,import.meta.url)}r=o(t.map(t=>{t=re(t,n);let r=s(t),i=ae(r);return oe(ie,r.href,()=>{if(e===void 0){e={all:new Set,styles:new Set};let t=document.getElementsByTagName(`link`);for(let n=t.length-1;n>=0;n--){let r=t[n];e.all.add(r.href),r.rel===`stylesheet`&&e.styles.add(r.href)}}if((i?e.styles:e.all).has(r.href))return;let t=document.createElement(`link`);if(t.rel=i?`stylesheet`:ne,i||(t.as=`script`),t.crossOrigin=``,t.href=r.href,a&&t.setAttribute(`nonce`,a),document.head.appendChild(t),i)return new Promise((e,n)=>{t.addEventListener(`load`,e),t.addEventListener(`error`,()=>n(Error(`Unable to preload CSS for ${r}`)))})})}).filter(e=>e!==void 0))}function i(e){let t=new Event(`vite:preloadError`,{cancelable:!0});if(t.payload=e,window.dispatchEvent(t),!t.defaultPrevented)throw e}return r.then(t=>{for(let e of t||[])e.status===`rejected`&&i(e.reason);return e().catch(i)})};R(),T(),_(),a(),l();var B=document.querySelector(`#cabecera-principal`),V=document.querySelector(`#nav-nodos-home`),H=document.querySelector(`#btn-volver-home`),U=document.querySelector(`#btn-explorador`),W=document.querySelector(`#btn-pizarra`),G=document.querySelector(`#nodo-portada`),K=document.querySelector(`#nodo-actualidad`),q=document.querySelector(`#nodo-inicio`),J={portada:{el:document.querySelector(`#vista-portada`),dominio:`editorial`,nodo:G},actualidad:{el:document.querySelector(`#vista-actualidad`),dominio:`editorial`,nodo:K},inicio:{el:document.querySelector(`#vista-inicio`),dominio:`editorial`,nodo:q},explorador:{el:document.querySelector(`#vista-explorador`),dominio:`operativo`,btn:U},pizarra:{el:document.querySelector(`#vista-pizarra`),dominio:`operativo`,btn:W}},se=!1,Y=!1,X=e=>new Promise(t=>setTimeout(t,e));async function Z(e,t=!1){if(Y)return;let n=Object.entries(J).find(([e,t])=>t.el&&!t.el.classList.contains(`vista-oculta`));if(n&&n[0]===e)return;let r=J[e];if(!r)return;Y=!0,ee(),F(e===`actualidad`);let i=n?n[1].dominio===`editorial`:!1,a=r.dominio===`editorial`;if(i&&a){if(t&&await X(500),n&&n[1].el){let e=n[1].el;e.classList.add(`editorial-salida`),await X(420),e.classList.remove(`editorial-salida`),e.classList.add(`vista-oculta`)}let i=e===`portada`||e===`actualidad`;B&&B.classList.toggle(`vista-oculta`,i),V&&V.classList.toggle(`vista-oculta`,e===`portada`),G&&G.classList.toggle(`activo`,e===`portada`),K&&K.classList.toggle(`activo`,e===`actualidad`),q&&q.classList.toggle(`activo`,e===`inicio`),await X(40),r.el&&(r.el.classList.remove(`vista-oculta`),r.el.classList.add(`editorial-entrada`),await X(550),r.el.classList.remove(`editorial-entrada`))}else{if(n&&n[1].el){let e=n[1].el;e.classList.add(`operativa-salida`),await X(180),e.classList.remove(`operativa-salida`),e.classList.add(`vista-oculta`)}if(I(),a){let t=e===`portada`||e===`actualidad`;B&&B.classList.toggle(`vista-oculta`,t),V&&V.classList.toggle(`vista-oculta`,e===`portada`),G&&G.classList.toggle(`activo`,e===`portada`),K&&K.classList.toggle(`activo`,e===`actualidad`),q&&q.classList.toggle(`activo`,e===`inicio`),H&&H.classList.add(`activo`),U&&U.classList.remove(`activo`),W&&W.classList.remove(`activo`)}else V&&V.classList.add(`vista-oculta`),B&&B.classList.remove(`vista-oculta`),H&&H.classList.remove(`activo`),U&&U.classList.toggle(`activo`,e===`explorador`),W&&W.classList.toggle(`activo`,e===`pizarra`);await X(1600),r.el&&(r.el.classList.remove(`vista-oculta`),r.el.classList.add(`operativa-entrada-izquierda`),await X(1250),r.el.classList.remove(`operativa-entrada-izquierda`))}Y=!1}G&&G.addEventListener(`click`,()=>Z(`portada`)),K&&K.addEventListener(`click`,()=>Z(`actualidad`)),q&&q.addEventListener(`click`,()=>Z(`inicio`)),H&&H.addEventListener(`click`,()=>Z(`inicio`)),U&&U.addEventListener(`click`,()=>Z(`explorador`)),W&&W.addEventListener(`click`,async()=>{Z(`pizarra`),se||=((await z(()=>import(`./boardView-BlchISgh.js`),[])).inicializarPizarra(),!0)});var Q=document.querySelector(`#titulo-portada-trigger`);Q&&(Q.addEventListener(`click`,()=>Z(`actualidad`,!0)),Q.addEventListener(`keydown`,e=>{(e.key===`Enter`||e.key===` `)&&(e.preventDefault(),Z(`actualidad`,!0))}));var $=document.querySelector(`#trigger-actualidad`);$&&($.addEventListener(`click`,()=>Z(`inicio`)),$.addEventListener(`keydown`,e=>{(e.key===`Enter`||e.key===` `)&&(e.preventDefault(),Z(`inicio`))})),B&&B.classList.add(`vista-oculta`),V&&V.classList.add(`vista-oculta`),G&&G.classList.add(`activo`),K&&K.classList.remove(`activo`),q&&q.classList.remove(`activo`);export{e as t};
+`,A=!1,j=0,M=2100,N=0,P=0;function F(e=!0){N=+!!e}function I(){A=!0,j=performance.now()}function L(e){let t=Math.max(0,Math.min(1,e));return t*t*t*(t*(t*6-15)+10)}function R(){if(document.querySelector(`#canvas-inmersivo`))return;let e=document.createElement(`canvas`);e.id=`canvas-inmersivo`,document.body.prepend(e);let t=e.getContext(`webgl`)||e.getContext(`experimental-webgl`);if(!t)return;function n(e,n){let r=t.createShader(e);return t.shaderSource(r,n),t.compileShader(r),t.getShaderParameter(r,t.COMPILE_STATUS)?r:(console.error(`Error al compilar Shader:`,t.getShaderInfoLog(r)),t.deleteShader(r),null)}let r=n(t.VERTEX_SHADER,k),i=n(t.FRAGMENT_SHADER,te);if(!r||!i)return;let a=t.createProgram();if(t.attachShader(a,r),t.attachShader(a,i),t.linkProgram(a),!t.getProgramParameter(a,t.LINK_STATUS))return;t.useProgram(a);let o=new Float32Array([-1,-1,1,-1,-1,1,1,1]),s=t.createBuffer();t.bindBuffer(t.ARRAY_BUFFER,s),t.bufferData(t.ARRAY_BUFFER,o,t.STATIC_DRAW);let c=t.getAttribLocation(a,`a_position`);t.enableVertexAttribArray(c),t.vertexAttribPointer(c,2,t.FLOAT,!1,0,0);let l=t.getUniformLocation(a,`u_time`),u=t.getUniformLocation(a,`u_scroll_progress`),d=t.getUniformLocation(a,`u_limite_marea`),f=t.getUniformLocation(a,`u_telon_progreso`),p=t.getUniformLocation(a,`u_resolution`),m=t.getUniformLocation(a,`u_tex_base`),h=t.getUniformLocation(a,`u_tex_liquid`),g=t.getUniformLocation(a,`u_tex_base_size`),_=t.getUniformLocation(a,`u_tex_liquid_size`);function y(){let n=Math.min(window.devicePixelRatio||1,window.innerWidth<850?1.25:1.5);e.width=Math.floor(window.innerWidth*n),e.height=Math.floor(window.innerHeight*n),t.viewport(0,0,e.width,e.height),t.uniform2f(p,e.width,e.height)}window.addEventListener(`resize`,y),y(),t.uniform2f(g,1920,1080),t.uniform2f(_,1920,1080);function b(e,n,r,i,a){let o=t.createTexture();t.activeTexture(e),t.bindTexture(t.TEXTURE_2D,o),t.texImage2D(t.TEXTURE_2D,0,t.RGBA,1,1,0,t.RGBA,t.UNSIGNED_BYTE,new Uint8Array([247,243,238,255]));let s=new Image;s.crossOrigin=`anonymous`,s.src=n,s.onload=()=>{t.activeTexture(e),t.bindTexture(t.TEXTURE_2D,o),t.texImage2D(t.TEXTURE_2D,0,t.RGBA,t.RGBA,t.UNSIGNED_BYTE,s),t.texParameteri(t.TEXTURE_2D,t.TEXTURE_WRAP_S,t.CLAMP_TO_EDGE),t.texParameteri(t.TEXTURE_2D,t.TEXTURE_WRAP_T,t.CLAMP_TO_EDGE),t.texParameteri(t.TEXTURE_2D,t.TEXTURE_MIN_FILTER,t.LINEAR),t.texParameteri(t.TEXTURE_2D,t.TEXTURE_MAG_FILTER,t.LINEAR),t.uniform2f(a,s.naturalWidth||1920,s.naturalHeight||1080)},s.onerror=()=>{s.src.includes(`.png`)?s.src=n.replace(`.png`,`.jpg`):r&&s.src!==r&&(s.src=r)};let c=e-t.TEXTURE0;t.uniform1i(i,c)}b(t.TEXTURE0,D,`https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=1600&auto=format&fit=crop`,m,g),b(t.TEXTURE1,O,`https://images.unsplash.com/photo-1518837695005-2083093ee35b?w=1600&auto=format&fit=crop`,h,_);let x=0,S=performance.now();v(e=>{x=e.progreso});function C(e){let n=(e-S)*.001;P+=(N-P)*.06;let r=.395;if(A){let t=(e-j)/M;t>=1?(A=!1,r=.395):r=t<.42?.395+L(t/.42)*(.85-.395):t<.76?.85-L((t-.42)/.34)*.55:.3+L((t-.76)/.24)*(.395-.3)}t.uniform1f(l,n),t.uniform1f(u,x),t.uniform1f(d,r),t.uniform1f(f,P),t.drawArrays(t.TRIANGLE_STRIP,0,4),requestAnimationFrame(C)}requestAnimationFrame(C)}var ne=`modulepreload`,re=function(e){return`/`+e},ie={},ae=function(e){return e.pathname.endsWith(`.css`)},oe=function(e,t,n){if(t in e)return e[t];let r=n();if(!r){e[t]=void 0;return}let i=r.then(()=>{e[t]=void 0},n=>{throw e[t]=void 0,n});return e[t]=i,i},z=function(e,t,n){let r=Promise.resolve();if(t&&t.length>0){let e,i=document.querySelector(`meta[property=csp-nonce]`),a=i?.nonce||i?.getAttribute(`nonce`);function o(e){return Promise.all(e.map(e=>Promise.resolve(e).then(e=>({status:`fulfilled`,value:e}),e=>({status:`rejected`,reason:e}))))}function s(e){return import.meta.resolve?new URL(import.meta.resolve(e)):new URL(e,import.meta.url)}r=o(t.map(t=>{t=re(t,n);let r=s(t),i=ae(r);return oe(ie,r.href,()=>{if(e===void 0){e={all:new Set,styles:new Set};let t=document.getElementsByTagName(`link`);for(let n=t.length-1;n>=0;n--){let r=t[n];e.all.add(r.href),r.rel===`stylesheet`&&e.styles.add(r.href)}}if((i?e.styles:e.all).has(r.href))return;let t=document.createElement(`link`);if(t.rel=i?`stylesheet`:ne,i||(t.as=`script`),t.crossOrigin=``,t.href=r.href,a&&t.setAttribute(`nonce`,a),document.head.appendChild(t),i)return new Promise((e,n)=>{t.addEventListener(`load`,e),t.addEventListener(`error`,()=>n(Error(`Unable to preload CSS for ${r}`)))})})}).filter(e=>e!==void 0))}function i(e){let t=new Event(`vite:preloadError`,{cancelable:!0});if(t.payload=e,window.dispatchEvent(t),!t.defaultPrevented)throw e}return r.then(t=>{for(let e of t||[])e.status===`rejected`&&i(e.reason);return e().catch(i)})};R(),T(),_(),a(),l();var B=document.querySelector(`#cabecera-principal`),V=document.querySelector(`#nav-nodos-home`),H=document.querySelector(`#btn-volver-home`),U=document.querySelector(`#btn-explorador`),W=document.querySelector(`#btn-pizarra`),G=document.querySelector(`#nodo-portada`),K=document.querySelector(`#nodo-actualidad`),q=document.querySelector(`#nodo-inicio`),J={portada:{el:document.querySelector(`#vista-portada`),dominio:`editorial`,nodo:G},actualidad:{el:document.querySelector(`#vista-actualidad`),dominio:`editorial`,nodo:K},inicio:{el:document.querySelector(`#vista-inicio`),dominio:`editorial`,nodo:q},explorador:{el:document.querySelector(`#vista-explorador`),dominio:`operativo`,btn:U},pizarra:{el:document.querySelector(`#vista-pizarra`),dominio:`operativo`,btn:W}},se=!1,Y=!1,X=e=>new Promise(t=>setTimeout(t,e));async function Z(e,t=!1){if(Y)return;let n=Object.entries(J).find(([e,t])=>t.el&&!t.el.classList.contains(`vista-oculta`));if(n&&n[0]===e)return;let r=J[e];if(!r)return;Y=!0,ee(),F(e===`actualidad`);let i=n?n[1].dominio===`editorial`:!1,a=r.dominio===`editorial`;if(i&&a){if(t&&await X(500),n&&n[1].el){let e=n[1].el;e.classList.add(`editorial-salida`),await X(420),e.classList.remove(`editorial-salida`),e.classList.add(`vista-oculta`)}let i=e===`portada`||e===`actualidad`;B&&B.classList.toggle(`vista-oculta`,i),V&&V.classList.toggle(`vista-oculta`,e===`portada`),G&&G.classList.toggle(`activo`,e===`portada`),K&&K.classList.toggle(`activo`,e===`actualidad`),q&&q.classList.toggle(`activo`,e===`inicio`),await X(40),r.el&&(r.el.classList.remove(`vista-oculta`),r.el.classList.add(`editorial-entrada`),await X(550),r.el.classList.remove(`editorial-entrada`))}else{if(n&&n[1].el){let e=n[1].el;e.classList.add(`operativa-salida`),await X(180),e.classList.remove(`operativa-salida`),e.classList.add(`vista-oculta`)}if(I(),a){let t=e===`portada`||e===`actualidad`;B&&B.classList.toggle(`vista-oculta`,t),V&&V.classList.toggle(`vista-oculta`,e===`portada`),G&&G.classList.toggle(`activo`,e===`portada`),K&&K.classList.toggle(`activo`,e===`actualidad`),q&&q.classList.toggle(`activo`,e===`inicio`),H&&H.classList.add(`activo`),U&&U.classList.remove(`activo`),W&&W.classList.remove(`activo`)}else V&&V.classList.add(`vista-oculta`),B&&B.classList.remove(`vista-oculta`),H&&H.classList.remove(`activo`),U&&U.classList.toggle(`activo`,e===`explorador`),W&&W.classList.toggle(`activo`,e===`pizarra`);await X(1600),r.el&&(r.el.classList.remove(`vista-oculta`),r.el.classList.add(`operativa-entrada-izquierda`),await X(1250),r.el.classList.remove(`operativa-entrada-izquierda`))}Y=!1}G&&G.addEventListener(`click`,()=>Z(`portada`)),K&&K.addEventListener(`click`,()=>Z(`actualidad`)),q&&q.addEventListener(`click`,()=>Z(`inicio`)),H&&H.addEventListener(`click`,()=>Z(`inicio`)),U&&U.addEventListener(`click`,()=>Z(`explorador`)),W&&W.addEventListener(`click`,async()=>{Z(`pizarra`),se||=((await z(()=>import(`./boardView-CBtIJ53D.js`),[])).inicializarPizarra(),!0)});var Q=document.querySelector(`#titulo-portada-trigger`);Q&&(Q.addEventListener(`click`,()=>Z(`actualidad`,!0)),Q.addEventListener(`keydown`,e=>{(e.key===`Enter`||e.key===` `)&&(e.preventDefault(),Z(`actualidad`,!0))}));var $=document.querySelector(`#trigger-actualidad`);$&&($.addEventListener(`click`,()=>Z(`inicio`)),$.addEventListener(`keydown`,e=>{(e.key===`Enter`||e.key===` `)&&(e.preventDefault(),Z(`inicio`))})),B&&B.classList.add(`vista-oculta`),V&&V.classList.add(`vista-oculta`),G&&G.classList.add(`activo`),K&&K.classList.remove(`activo`),q&&q.classList.remove(`activo`);export{e as t};
